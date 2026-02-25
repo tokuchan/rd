@@ -1,6 +1,7 @@
 """Tests for the ReliableData BlockCache REST API."""
 
 import base64
+import hashlib
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from rd.database import get_db
-from rd.main import app
+from rd.main import BLOCK_SIZE, app
 from rd.models import Base
 
 
@@ -91,3 +92,125 @@ def test_delete_missing_block(client):
 def test_invalid_base64_rejected(client):
     resp = client.put("/blocks/bad", json={"blockData": "not-valid-base64!!!"})
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Tests for PUT /file (file-addressed blocks)
+# ---------------------------------------------------------------------------
+
+
+def test_put_file_returns_sha3_block_id(client):
+    """PUT /file must return a block ID equal to SHA3-256(contextKey + path)."""
+    from Crypto.Hash import SHA3_256
+
+    payload = base64.b64encode(b"hello file").decode()
+    resp = client.put("/file", json={"contextKey": "docs", "path": "/readme.txt", "blockData": payload})
+    assert resp.status_code == 200
+    data = resp.json()
+
+    h = SHA3_256.new()
+    h.update(b"docs")
+    h.update(b"/readme.txt")
+    expected_id = h.hexdigest()
+    assert data["blockID"] == expected_id
+
+
+def test_put_file_pads_to_block_size(client):
+    """PUT /file must pad the stored data to BLOCK_SIZE bytes."""
+    payload = base64.b64encode(b"small").decode()
+    resp = client.put("/file", json={"contextKey": "ns", "path": 42, "blockData": payload})
+    assert resp.status_code == 200
+    stored = base64.b64decode(resp.json()["blockData"])
+    assert len(stored) == BLOCK_SIZE
+    assert stored[:5] == b"small"
+    assert stored[5:] == b"\x00" * (BLOCK_SIZE - 5)
+
+
+def test_put_file_integer_path(client):
+    """PUT /file must accept an integer path and derive the key consistently."""
+    from Crypto.Hash import SHA3_256
+
+    payload = base64.b64encode(b"inode data").decode()
+    resp = client.put("/file", json={"contextKey": "inodes", "path": 1001, "blockData": payload})
+    assert resp.status_code == 200
+
+    h = SHA3_256.new()
+    h.update(b"inodes")
+    h.update(b"1001")
+    expected_id = h.hexdigest()
+    assert resp.json()["blockID"] == expected_id
+
+
+def test_put_file_rejects_oversized_block(client):
+    """PUT /file must reject data larger than BLOCK_SIZE bytes."""
+    oversized = base64.b64encode(b"x" * (BLOCK_SIZE + 1)).decode()
+    resp = client.put("/file", json={"contextKey": "ns", "path": "big", "blockData": oversized})
+    assert resp.status_code == 422
+
+
+def test_put_file_updates_existing_block(client):
+    """A second PUT /file to the same key overwrites the first."""
+    first = base64.b64encode(b"first").decode()
+    second = base64.b64encode(b"second").decode()
+    resp1 = client.put("/file", json={"contextKey": "ns", "path": "k", "blockData": first})
+    resp2 = client.put("/file", json={"contextKey": "ns", "path": "k", "blockData": second})
+    assert resp1.json()["blockID"] == resp2.json()["blockID"]
+    stored = base64.b64decode(resp2.json()["blockData"])
+    assert stored[:6] == b"second"
+
+
+# ---------------------------------------------------------------------------
+# Tests for PUT /data (content-addressed blocks)
+# ---------------------------------------------------------------------------
+
+
+def _expected_data_block_id(raw: bytes) -> str:
+    """Compute the expected block ID for PUT /data (SHA3-256 of the padded block)."""
+    from Crypto.Hash import SHA3_256
+
+    padded = raw + b"\x00" * (BLOCK_SIZE - len(raw))
+    h = SHA3_256.new()
+    h.update(padded)
+    return h.hexdigest()
+
+
+def test_put_data_returns_content_addressed_id(client):
+    """PUT /data must return a block ID equal to SHA3-256 of the padded block."""
+    raw = b"content addressed"
+    payload = base64.b64encode(raw).decode()
+    resp = client.put("/data", json={"blockData": payload})
+    assert resp.status_code == 200
+    assert resp.json()["blockID"] == _expected_data_block_id(raw)
+
+
+def test_put_data_pads_to_block_size(client):
+    """PUT /data must pad data to BLOCK_SIZE bytes."""
+    payload = base64.b64encode(b"tiny").decode()
+    resp = client.put("/data", json={"blockData": payload})
+    assert resp.status_code == 200
+    stored = base64.b64decode(resp.json()["blockData"])
+    assert len(stored) == BLOCK_SIZE
+
+
+def test_put_data_identical_content_same_id(client):
+    """Two PUT /data calls with the same content must yield the same block ID."""
+    payload = base64.b64encode(b"dedup me").decode()
+    resp1 = client.put("/data", json={"blockData": payload})
+    resp2 = client.put("/data", json={"blockData": payload})
+    assert resp1.json()["blockID"] == resp2.json()["blockID"]
+
+
+def test_put_data_rejects_oversized_block(client):
+    """PUT /data must reject data larger than BLOCK_SIZE bytes."""
+    oversized = base64.b64encode(b"x" * (BLOCK_SIZE + 1)).decode()
+    resp = client.put("/data", json={"blockData": oversized})
+    assert resp.status_code == 422
+
+
+def test_put_data_exact_block_size_accepted(client):
+    """PUT /data must accept data that is exactly BLOCK_SIZE bytes."""
+    payload = base64.b64encode(b"z" * BLOCK_SIZE).decode()
+    resp = client.put("/data", json={"blockData": payload})
+    assert resp.status_code == 200
+    stored = base64.b64decode(resp.json()["blockData"])
+    assert stored == b"z" * BLOCK_SIZE
