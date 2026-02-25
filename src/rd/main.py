@@ -139,7 +139,8 @@ def get_block(blockID: str, db: Session = Depends(get_db)) -> BlockOut:
 @app.put("/blocks/{blockID}", response_model=BlockOut, summary="Create or update a block")
 def put_block(blockID: str, body: BlockIn, db: Session = Depends(get_db)) -> BlockOut:
     raw = _decode(body.blockData)
-    return _to_block_out(_upsert(db, blockID, raw))
+    padded = _pad_block(raw)
+    return _to_block_out(_upsert(db, blockID, padded))
 
 
 @app.delete("/blocks/{blockID}", status_code=204, summary="Delete a block")
