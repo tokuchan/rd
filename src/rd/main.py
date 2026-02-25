@@ -85,8 +85,16 @@ def _pad_block(data: bytes) -> bytes:
 
 def _file_block_id(context_key: str, path: Union[str, int]) -> str:
     """Derive a block ID by hashing the owner's context key (public key) followed by a path or integer ID."""
+    try:
+        context_key_bytes = bytes.fromhex(context_key)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail="contextKey must be a valid hex-encoded public key",
+        )
+
     h = SHA3_256.new()
-    h.update(context_key.encode())
+    h.update(context_key_bytes)
     h.update(str(path).encode())
     return h.hexdigest()
 
