@@ -1,8 +1,8 @@
 """FastAPI application for the ReliableData BlockCache."""
 
 import base64
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Union
 
 from Crypto.Hash import SHA3_256
@@ -48,7 +48,7 @@ class BlockOut(BaseModel):
 
 
 class FileBlockIn(BaseModel):
-    contextKey: str  # public part of the owner's data-context key pair (e.g. hex-encoded ED25519 public key)
+    contextKey: str  # public part of the owner's data-context key pair (hex ED25519 public key)
     path: Union[str, int]
     blockData: str  # base64-encoded binary data, up to BLOCK_SIZE bytes
 
@@ -84,7 +84,7 @@ def _pad_block(data: bytes) -> bytes:
 
 
 def _file_block_id(context_key: str, path: Union[str, int]) -> str:
-    """Derive a block ID by hashing the owner's context key (public key) followed by a path or integer ID."""
+    """Derive a block ID by hashing the owner's context key followed by a path or integer ID."""
     try:
         context_key_bytes = bytes.fromhex(context_key)
     except ValueError:
@@ -152,16 +152,24 @@ def delete_block(blockID: str, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@app.put("/file", response_model=BlockOut, summary="Store a file-addressed block (key = SHA3-256(contextKey + path))")
+@app.put(
+    "/file",
+    response_model=BlockOut,
+    summary="Store a file-addressed block (key = SHA3-256(contextKey + path))",
+)
 def put_file_block(body: FileBlockIn, db: Session = Depends(get_db)) -> BlockOut:
-    """Write a fixed-size block whose ID is derived from the owner's context key and a path/integer."""
+    """Write a fixed-size block whose ID is derived from the owner's context key and a path."""
     raw = _decode(body.blockData)
     padded = _pad_block(raw)
     block_id = _file_block_id(body.contextKey, body.path)
     return _to_block_out(_upsert(db, block_id, padded))
 
 
-@app.put("/data", response_model=BlockOut, summary="Store a content-addressed data block (key = SHA3-256(block))")
+@app.put(
+    "/data",
+    response_model=BlockOut,
+    summary="Store a content-addressed data block (key = SHA3-256(block))",
+)
 def put_data_block(body: DataBlockIn, db: Session = Depends(get_db)) -> BlockOut:
     """Write a fixed-size block whose ID is the SHA-3 256 hash of its contents."""
     raw = _decode(body.blockData)

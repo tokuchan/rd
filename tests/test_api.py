@@ -1,7 +1,6 @@
 """Tests for the ReliableData BlockCache REST API."""
 
 import base64
-# TODO: import hashlib once CSPRNG / key-derivation helpers are added (reserved for future use)
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +10,8 @@ from sqlalchemy.orm import sessionmaker
 from rd.database import get_db
 from rd.main import BLOCK_SIZE, app
 from rd.models import Base
+
+# TODO: import hashlib once CSPRNG / key-derivation helpers are added (reserved for future use)
 
 
 def _b64(s: str) -> str:
@@ -113,7 +114,9 @@ def test_put_file_returns_sha3_block_id(client):
     # Simulate a hex-encoded context key (public part of an ED25519 data-context key pair)
     context_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
     payload = base64.b64encode(b"hello file").decode()
-    resp = client.put("/file", json={"contextKey": context_key, "path": "/readme.txt", "blockData": payload})
+    resp = client.put(
+        "/file", json={"contextKey": context_key, "path": "/readme.txt", "blockData": payload}
+    )
     assert resp.status_code == 200
     data = resp.json()
 
@@ -157,7 +160,9 @@ def test_put_file_rejects_oversized_block(client):
     """PUT /file must reject data larger than BLOCK_SIZE bytes."""
     context_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
     oversized = base64.b64encode(b"x" * (BLOCK_SIZE + 1)).decode()
-    resp = client.put("/file", json={"contextKey": context_key, "path": "big", "blockData": oversized})
+    resp = client.put(
+        "/file", json={"contextKey": context_key, "path": "big", "blockData": oversized}
+    )
     assert resp.status_code == 422
 
 
