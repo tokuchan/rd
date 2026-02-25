@@ -1,6 +1,7 @@
 """Tests for the ReliableData BlockCache REST API."""
 
 import base64
+# TODO: import hashlib once CSPRNG / key-derivation helpers are added (reserved for future use)
 
 import pytest
 from fastapi.testclient import TestClient
