@@ -100,18 +100,18 @@ def test_invalid_base64_rejected(client):
 
 
 def test_put_file_returns_sha3_block_id(client):
-    """PUT /file must return a block ID equal to SHA3-256(publicKey + path)."""
+    """PUT /file must return a block ID equal to SHA3-256(contextKey + path)."""
     from Crypto.Hash import SHA3_256
 
-    # Simulate a hex-encoded public key (e.g. ED25519 public key)
-    pub_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+    # Simulate a hex-encoded context key (public part of an ED25519 data-context key pair)
+    context_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
     payload = base64.b64encode(b"hello file").decode()
-    resp = client.put("/file", json={"publicKey": pub_key, "path": "/readme.txt", "blockData": payload})
+    resp = client.put("/file", json={"contextKey": context_key, "path": "/readme.txt", "blockData": payload})
     assert resp.status_code == 200
     data = resp.json()
 
     h = SHA3_256.new()
-    h.update(pub_key.encode())
+    h.update(context_key.encode())
     h.update(b"/readme.txt")
     expected_id = h.hexdigest()
     assert data["blockID"] == expected_id
@@ -119,9 +119,9 @@ def test_put_file_returns_sha3_block_id(client):
 
 def test_put_file_pads_to_block_size(client):
     """PUT /file must pad the stored data to BLOCK_SIZE bytes."""
-    pub_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+    context_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
     payload = base64.b64encode(b"small").decode()
-    resp = client.put("/file", json={"publicKey": pub_key, "path": 42, "blockData": payload})
+    resp = client.put("/file", json={"contextKey": context_key, "path": 42, "blockData": payload})
     assert resp.status_code == 200
     stored = base64.b64decode(resp.json()["blockData"])
     assert len(stored) == BLOCK_SIZE
@@ -133,14 +133,14 @@ def test_put_file_integer_path(client):
     """PUT /file must accept an integer path and derive the key consistently."""
     from Crypto.Hash import SHA3_256
 
-    # Simulate a hex-encoded public key used to namespace a file tree
-    pub_key = "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+    # Simulate a hex-encoded context key (public part of an ED25519 data-context key pair)
+    context_key = "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
     payload = base64.b64encode(b"file metadata").decode()
-    resp = client.put("/file", json={"publicKey": pub_key, "path": 1001, "blockData": payload})
+    resp = client.put("/file", json={"contextKey": context_key, "path": 1001, "blockData": payload})
     assert resp.status_code == 200
 
     h = SHA3_256.new()
-    h.update(pub_key.encode())
+    h.update(context_key.encode())
     h.update(b"1001")
     expected_id = h.hexdigest()
     assert resp.json()["blockID"] == expected_id
@@ -148,19 +148,19 @@ def test_put_file_integer_path(client):
 
 def test_put_file_rejects_oversized_block(client):
     """PUT /file must reject data larger than BLOCK_SIZE bytes."""
-    pub_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+    context_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
     oversized = base64.b64encode(b"x" * (BLOCK_SIZE + 1)).decode()
-    resp = client.put("/file", json={"publicKey": pub_key, "path": "big", "blockData": oversized})
+    resp = client.put("/file", json={"contextKey": context_key, "path": "big", "blockData": oversized})
     assert resp.status_code == 422
 
 
 def test_put_file_updates_existing_block(client):
     """A second PUT /file to the same key overwrites the first."""
-    pub_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+    context_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
     first = base64.b64encode(b"first").decode()
     second = base64.b64encode(b"second").decode()
-    resp1 = client.put("/file", json={"publicKey": pub_key, "path": "k", "blockData": first})
-    resp2 = client.put("/file", json={"publicKey": pub_key, "path": "k", "blockData": second})
+    resp1 = client.put("/file", json={"contextKey": context_key, "path": "k", "blockData": first})
+    resp2 = client.put("/file", json={"contextKey": context_key, "path": "k", "blockData": second})
     assert resp1.json()["blockID"] == resp2.json()["blockID"]
     stored = base64.b64decode(resp2.json()["blockData"])
     assert stored[:6] == b"second"

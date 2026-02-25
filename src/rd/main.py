@@ -48,7 +48,7 @@ class BlockOut(BaseModel):
 
 
 class FileBlockIn(BaseModel):
-    publicKey: str  # public portion of the owner's key pair (e.g. hex- or base64-encoded)
+    contextKey: str  # public part of the owner's data-context key pair (e.g. hex-encoded ED25519 public key)
     path: Union[str, int]
     blockData: str  # base64-encoded binary data, up to BLOCK_SIZE bytes
 
@@ -83,10 +83,10 @@ def _pad_block(data: bytes) -> bytes:
     return data + b"\x00" * (BLOCK_SIZE - len(data))
 
 
-def _file_block_id(public_key: str, path: Union[str, int]) -> str:
-    """Derive a block ID by hashing the owner's public key followed by a path or integer ID."""
+def _file_block_id(context_key: str, path: Union[str, int]) -> str:
+    """Derive a block ID by hashing the owner's context key (public key) followed by a path or integer ID."""
     h = SHA3_256.new()
-    h.update(public_key.encode())
+    h.update(context_key.encode())
     h.update(str(path).encode())
     return h.hexdigest()
 
@@ -143,12 +143,12 @@ def delete_block(blockID: str, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@app.put("/file", response_model=BlockOut, summary="Store a file-addressed block (key = SHA3-256(publicKey + path))")
+@app.put("/file", response_model=BlockOut, summary="Store a file-addressed block (key = SHA3-256(contextKey + path))")
 def put_file_block(body: FileBlockIn, db: Session = Depends(get_db)) -> BlockOut:
-    """Write a fixed-size block whose ID is derived from the owner's public key and a path/integer."""
+    """Write a fixed-size block whose ID is derived from the owner's context key and a path/integer."""
     raw = _decode(body.blockData)
     padded = _pad_block(raw)
-    block_id = _file_block_id(body.publicKey, body.path)
+    block_id = _file_block_id(body.contextKey, body.path)
     return _to_block_out(_upsert(db, block_id, padded))
 
 
