@@ -1,7 +1,6 @@
 """Tests for the ReliableData BlockCache REST API."""
 
 import base64
-import hashlib
 
 import pytest
 from fastapi.testclient import TestClient
@@ -47,11 +46,15 @@ def test_put_and_get(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["blockID"] == "hello"
-    assert _decode(data["blockData"]) == "world"
+    stored = base64.b64decode(data["blockData"])
+    assert stored[:5] == b"world"
+    assert len(stored) == BLOCK_SIZE
 
     resp = client.get("/blocks/hello")
     assert resp.status_code == 200
-    assert _decode(resp.json()["blockData"]) == "world"
+    stored = base64.b64decode(resp.json()["blockData"])
+    assert stored[:5] == b"world"
+    assert len(stored) == BLOCK_SIZE
 
 
 def test_put_binary_data(client):
@@ -60,14 +63,17 @@ def test_put_binary_data(client):
     resp = client.put("/blocks/bin", json={"blockData": b64})
     assert resp.status_code == 200
     returned = base64.b64decode(resp.json()["blockData"])
-    assert returned == raw
+    assert returned[:256] == raw
+    assert len(returned) == BLOCK_SIZE
 
 
 def test_update_existing_block(client):
     client.put("/blocks/foo", json={"blockData": _b64("bar")})
     client.put("/blocks/foo", json={"blockData": _b64("baz")})
     resp = client.get("/blocks/foo")
-    assert _decode(resp.json()["blockData"]) == "baz"
+    stored = base64.b64decode(resp.json()["blockData"])
+    assert stored[:3] == b"baz"
+    assert len(stored) == BLOCK_SIZE
 
 
 def test_get_missing_block(client):
@@ -100,7 +106,7 @@ def test_invalid_base64_rejected(client):
 
 
 def test_put_file_returns_sha3_block_id(client):
-    """PUT /file must return a block ID equal to SHA3-256(contextKey + path)."""
+    """PUT /file must return a block ID equal to SHA3-256(bytes.fromhex(contextKey) + path)."""
     from Crypto.Hash import SHA3_256
 
     # Simulate a hex-encoded context key (public part of an ED25519 data-context key pair)
@@ -111,7 +117,7 @@ def test_put_file_returns_sha3_block_id(client):
     data = resp.json()
 
     h = SHA3_256.new()
-    h.update(context_key.encode())
+    h.update(bytes.fromhex(context_key))
     h.update(b"/readme.txt")
     expected_id = h.hexdigest()
     assert data["blockID"] == expected_id
@@ -140,7 +146,7 @@ def test_put_file_integer_path(client):
     assert resp.status_code == 200
 
     h = SHA3_256.new()
-    h.update(context_key.encode())
+    h.update(bytes.fromhex(context_key))
     h.update(b"1001")
     expected_id = h.hexdigest()
     assert resp.json()["blockID"] == expected_id

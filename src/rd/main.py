@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 from typing import Union
 
-from Crypto.Hash import SHA3_256, keccak
+from Crypto.Hash import SHA3_256
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -68,7 +68,7 @@ def _encode(data: bytes) -> str:
 
 def _decode(data: str) -> bytes:
     try:
-        return base64.b64decode(data)
+        return base64.b64decode(data, validate=True)
     except Exception:
         raise HTTPException(status_code=422, detail="blockData must be valid base64")
 
