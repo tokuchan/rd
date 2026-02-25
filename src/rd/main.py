@@ -1,5 +1,6 @@
-"""FastAPI application for the ReliableData key/value store."""
+"""FastAPI application for the ReliableData BlockCache."""
 
+import base64
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
@@ -18,8 +19,8 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(
-    title="ReliableData",
-    description="A SQLite3-backed key/value store exposed via a REST interface.",
+    title="BlockCache",
+    description="A reliable block cache exposed via a REST interface.",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -30,15 +31,35 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 
-class ValueIn(BaseModel):
-    value: str
+class BlockIn(BaseModel):
+    blockData: str  # base64-encoded binary data
 
 
-class EntryOut(BaseModel):
-    key: str
-    value: str
+class BlockOut(BaseModel):
+    blockID: str
+    blockData: str  # base64-encoded binary data
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _encode(data: bytes) -> str:
+    return base64.b64encode(data).decode()
+
+
+def _decode(data: str) -> bytes:
+    try:
+        return base64.b64decode(data)
+    except Exception:
+        raise HTTPException(status_code=422, detail="blockData must be valid base64")
+
+
+def _to_block_out(entry: Store) -> BlockOut:
+    return BlockOut(blockID=entry.block_id, blockData=_encode(entry.block_data or b""))
 
 
 # ---------------------------------------------------------------------------
@@ -46,36 +67,32 @@ class EntryOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@app.get("/keys", response_model=list[EntryOut], summary="List all entries")
-def list_keys(db: Session = Depends(get_db)) -> list[Store]:
-    return db.query(Store).all()
-
-
-@app.get("/keys/{key}", response_model=EntryOut, summary="Get a value by key")
-def get_key(key: str, db: Session = Depends(get_db)) -> Store:
-    entry = db.get(Store, key)
+@app.get("/blocks/{blockID}", response_model=BlockOut, summary="Get a block by ID")
+def get_block(blockID: str, db: Session = Depends(get_db)) -> BlockOut:
+    entry = db.get(Store, blockID)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Key '{key}' not found")
-    return entry
+        raise HTTPException(status_code=404, detail=f"Block '{blockID}' not found")
+    return _to_block_out(entry)
 
 
-@app.put("/keys/{key}", response_model=EntryOut, summary="Create or update a key/value pair")
-def put_key(key: str, body: ValueIn, db: Session = Depends(get_db)) -> Store:
-    entry = db.get(Store, key)
+@app.put("/blocks/{blockID}", response_model=BlockOut, summary="Create or update a block")
+def put_block(blockID: str, body: BlockIn, db: Session = Depends(get_db)) -> BlockOut:
+    raw = _decode(body.blockData)
+    entry = db.get(Store, blockID)
     if entry is None:
-        entry = Store(key=key, value=body.value)
+        entry = Store(block_id=blockID, block_data=raw)
         db.add(entry)
     else:
-        entry.value = body.value  # type: ignore[assignment]
+        entry.block_data = raw  # type: ignore[assignment]
     db.commit()
     db.refresh(entry)
-    return entry
+    return _to_block_out(entry)
 
 
-@app.delete("/keys/{key}", status_code=204, summary="Delete a key/value pair")
-def delete_key(key: str, db: Session = Depends(get_db)) -> None:
-    entry = db.get(Store, key)
+@app.delete("/blocks/{blockID}", status_code=204, summary="Delete a block")
+def delete_block(blockID: str, db: Session = Depends(get_db)) -> None:
+    entry = db.get(Store, blockID)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Key '{key}' not found")
+        raise HTTPException(status_code=404, detail=f"Block '{blockID}' not found")
     db.delete(entry)
     db.commit()

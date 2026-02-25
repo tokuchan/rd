@@ -4,7 +4,7 @@ All schema is defined in the single ``Store`` class so that it is easy to
 modify in one place.
 """
 
-from sqlalchemy import Column, DateTime, String, func
+from sqlalchemy import Column, DateTime, LargeBinary, String, func
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -13,15 +13,15 @@ class Base(DeclarativeBase):
 
 
 class Store(Base):
-    """Key/value store table.
+    """Block cache table.
 
     Modify this class to change the database schema.
     """
 
     __tablename__ = "store"
 
-    key: str = Column(String, primary_key=True, index=True, nullable=False)
-    value: str = Column(String, nullable=False, default="")
+    block_id: str = Column(String, primary_key=True, index=True, nullable=False)
+    block_data: bytes = Column(LargeBinary, nullable=False, default=b"")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True),

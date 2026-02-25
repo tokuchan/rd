@@ -1,25 +1,37 @@
 """Command-line entry point for the ReliableData server."""
 
-import argparse
+import logging
 
+import click
 import uvicorn
+from rich.logging import RichHandler
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        prog="rd-server",
-        description="Start the ReliableData key/value REST server.",
+def _configure_logging(verbose: bool) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler(rich_tracebacks=True)],
     )
-    parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
-    parser.add_argument("--reload", action="store_true", help="Enable auto-reload (development)")
-    args = parser.parse_args()
 
+
+@click.command()
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
+@click.option("--port", default=8000, show_default=True, type=int, help="Bind port.")
+@click.option("--reload", is_flag=True, default=False, help="Enable auto-reload (development).")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Enable debug logging.")
+def main(host: str, port: int, reload: bool, verbose: bool) -> None:
+    """Start the ReliableData BlockCache REST server."""
+    _configure_logging(verbose)
+    logger = logging.getLogger(__name__)
+    logger.info("Starting BlockCache server on %s:%d", host, port)
     uvicorn.run(
         "rd.main:app",
-        host=args.host,
-        port=args.port,
-        reload=args.reload,
+        host=host,
+        port=port,
+        reload=reload,
     )
 
 
