@@ -4,7 +4,7 @@ import logging
 import os
 from collections.abc import Generator
 
-from sqlalchemy import event, create_engine, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from rd.models import Base

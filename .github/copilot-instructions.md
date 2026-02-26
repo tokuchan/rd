@@ -1,5 +1,19 @@
 # Copilot Agent Instructions
 
+## Code style and linting
+
+This project uses **black**, **isort**, and **flake8** to enforce consistent formatting and style.
+Before opening a pull request, always run these tools and fix any issues they report:
+
+```bash
+black --line-length 100 src/ tests/
+isort --profile black --line-length 100 src/ tests/
+flake8 --max-line-length 100 --extend-ignore E203,W503 src/ tests/
+```
+
+The same checks run automatically in CI (`.github/workflows/lint.yml`) on every push and pull
+request, so PRs will be blocked if the code is not clean.
+
 ## Terminology
 
 ### Data-context key pair

@@ -1,0 +1,29 @@
+name: Lint
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: pip install "black>=24.0" "isort>=5.13" "flake8>=7.0"
+
+      - name: Check formatting (black)
+        run: black --check --line-length 100 src/ tests/
+
+      - name: Check import order (isort)
+        run: isort --check --profile black --line-length 100 src/ tests/
+
+      - name: Lint (flake8)
+        run: flake8 --max-line-length 100 --extend-ignore E203,W503 src/ tests/
