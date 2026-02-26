@@ -24,13 +24,18 @@ def _configure_logging(verbosity: int) -> None:
     )
 
 
-@click.command()
+@click.group()
+def main() -> None:
+    """ReliableData command-line interface."""
+
+
+@main.command()
 @click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
 @click.option("--port", default=8000, show_default=True, type=int, help="Bind port.")
 @click.option("--reload", is_flag=True, default=False, help="Enable auto-reload (development).")
 @click.option("-v", "verbosity", count=True, help="Increase verbosity (repeatable).")
 @click.option("-q", "quietness", count=True, help="Decrease verbosity (repeatable).")
-def main(host: str, port: int, reload: bool, verbosity: int, quietness: int) -> None:
+def cache(host: str, port: int, reload: bool, verbosity: int, quietness: int) -> None:
     """Start the ReliableData BlockCache REST server."""
     _configure_logging(verbosity - quietness)
     logger = logging.getLogger(__name__)

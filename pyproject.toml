@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rd-server = "rd.cli:main"
+rd = "rd.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rd"]
