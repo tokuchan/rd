@@ -158,7 +158,8 @@ def delete_block(blockID: str, db: Session = Depends(get_db)) -> None:
     summary="Store a file-addressed block (key = SHA3-256(contextKey + path))",
 )
 def put_file_block(body: FileBlockIn, db: Session = Depends(get_db)) -> BlockOut:
-    """Write a fixed-size block whose ID is derived from the owner's context key and a path."""
+    """Write a fixed-size block whose ID is derived from the owner's context key
+    and a path or integer ID."""
     raw = _decode(body.blockData)
     padded = _pad_block(raw)
     block_id = _file_block_id(body.contextKey, body.path)
