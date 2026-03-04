@@ -12,6 +12,12 @@ _LEVELS = [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.
 _DEFAULT_LEVEL_INDEX = 1  # INFO
 
 
+def _display_host(host: str) -> str:
+    if host in {"0.0.0.0", "::"}:
+        return "127.0.0.1"
+    return host
+
+
 def _configure_logging(verbosity: int) -> None:
     # Clamp index to valid range
     index = max(0, min(_DEFAULT_LEVEL_INDEX - verbosity, len(_LEVELS) - 1))
@@ -39,7 +45,12 @@ def cache(host: str, port: int, reload: bool, verbosity: int, quietness: int) ->
     """Start the ReliableData BlockCache REST server."""
     _configure_logging(verbosity - quietness)
     logger = logging.getLogger(__name__)
+    display_host = _display_host(host)
+    base_url = f"http://{display_host}:{port}"
     logger.info("Starting BlockCache server on %s:%d", host, port)
+    logger.info("API: %s", base_url)
+    logger.info("Interactive API docs: %s/docs", base_url)
+    logger.info("ReDoc API docs: %s/redoc", base_url)
     uvicorn.run(
         "rd.main:app",
         host=host,
