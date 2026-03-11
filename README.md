@@ -45,6 +45,15 @@ uv build
 uv run rd cache
 ```
 
+## The Core Principles
+These are the core principles of the Reliable Data system:
+
+1. Your data should not have to be tied to any particular storage device or system. 
+2. You should be able to access any particular file from any device you own. 
+3. If a device is destroyed, you should not lose the data on that device. 
+4. It should be easy to rent out storage you own; or rent storage from others, which you tie into your context. 
+5. The system should be open source, open protocol, and open format. That way, you can always take it with you. 
+
 ## Architecture — Port & Adaptor Pattern
 
 The block-cache layer uses the **Port & Adaptor** (Hexagonal Architecture) pattern, inspired by
@@ -76,7 +85,7 @@ src/rd/
 |---|---|
 | `errors.py` | `BlockNotFoundError`, `BlockTooLargeError` |
 | `models.py` | `Key` (frozen dataclass, string value) and `Block` (bytes + `pad()` helper).  `BLOCK_SIZE = 4096`. |
-| `ports.py` | `BlockCachePort` — a `typing.Protocol` with exactly two methods: `store(key, block) → Block` and `get(key) → Block \| None`. |
+| `ports.py` | `BlockCachePort` — a `typing.Protocol` with exactly three methods: `store(key, block) → Block`, `get(key) → Block \| None`, and `delete(key) → bool`. |
 | `useCases.py` | `derive_file_block_key`, `derive_data_block_key`, `store_file_block`, `store_data_block` — pure functions that work with any `BlockCachePort` adaptor. |
 
 #### `BlockCachePort` Protocol
@@ -88,7 +97,7 @@ class BlockCachePort(Protocol):
     def delete(self, key: Key) -> bool: ...
 ```
 
-Any class that implements these two methods satisfies the protocol via structural sub-typing —
+Any class that implements these three methods satisfies the protocol via structural sub-typing —
 no inheritance required.
 
 ### Key derivation (`useCases.py`)
@@ -122,14 +131,5 @@ All three adaptors implement the full `BlockCachePort` interface: `store`, `get`
 
 No base class or registration step is required — Python's structural sub-typing
 (`typing.Protocol`) handles the rest.
-
-## The Core Principles
-These are the core principles of the Reliable Data system:
-
-1. Your data should not have to be tied to any particular storage device or system. 
-2. You should be able to access any particular file from any device you own. 
-3. If a device is destroyed, you should not lose the data on that device. 
-4. It should be easy to rent out storage you own; or rent storage from others, which you tie into your context. 
-5. The system should be open source, open protocol, and open format. That way, you can always take it with you. 
 
  
