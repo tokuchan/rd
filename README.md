@@ -85,6 +85,7 @@ src/rd/
 class BlockCachePort(Protocol):
     def store(self, key: Key, block: Block) -> Block: ...
     def get(self, key: Key) -> Block | None: ...
+    def delete(self, key: Key) -> bool: ...
 ```
 
 Any class that implements these two methods satisfies the protocol via structural sub-typing —
@@ -108,16 +109,16 @@ ED25519 public key that acts as a namespace for all of a user's file-addressed b
 | `DbmBlockCache` | Python built-in `dbm` | Portable, no extra dependencies; file path passed to constructor. |
 | `FsBlockCache` | Plain filesystem | One file per block; key is used as filename (percent-encoded for safety). |
 
-All three adaptors expose the same `store` / `get` interface required by `BlockCachePort`, plus a
-`delete(key) → bool` helper that is outside the protocol.
+All three adaptors implement the full `BlockCachePort` interface: `store`, `get`, and `delete`.
 
 ### Adding a new adaptor
 
 1. Create `src/rd/adaptors/myBackend.py`.
-2. Define a class with `store(self, key: Key, block: Block) -> Block` and
-   `get(self, key: Key) -> Block | None`.
-3. Optionally add a `delete(self, key: Key) -> bool` method.
-4. Pass an instance of your adaptor wherever a `BlockCachePort` is expected.
+2. Define a class with:
+   - `store(self, key: Key, block: Block) -> Block`
+   - `get(self, key: Key) -> Block | None`
+   - `delete(self, key: Key) -> bool`
+3. Pass an instance of your adaptor wherever a `BlockCachePort` is expected.
 
 No base class or registration step is required — Python's structural sub-typing
 (`typing.Protocol`) handles the rest.

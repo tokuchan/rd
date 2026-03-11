@@ -1,7 +1,7 @@
 """BlockCache port – defines how callers interact with any block-cache back-end.
 
-Any class that implements both :meth:`store` and :meth:`get` with the correct
-signatures satisfies this protocol and can be used wherever a
+Any class that implements :meth:`store`, :meth:`get`, and :meth:`delete` with
+the correct signatures satisfies this protocol and can be used wherever a
 :class:`BlockCachePort` is expected.
 """
 
@@ -15,10 +15,11 @@ from rd.BlockCache.models import Block, Key
 class BlockCachePort(Protocol):
     """Protocol that all block-cache adaptors must satisfy.
 
-    Two operations are required:
+    Three operations are required:
 
-    * :meth:`store` — persist a block under a key and return the stored block.
-    * :meth:`get`   — retrieve a block by key, or ``None`` if absent.
+    * :meth:`store`  — persist a block under a key and return the stored block.
+    * :meth:`get`    — retrieve a block by key, or ``None`` if absent.
+    * :meth:`delete` — remove a block by key; return ``True`` if it existed.
     """
 
     def store(self, key: Key, block: Block) -> Block:
@@ -36,5 +37,14 @@ class BlockCachePort(Protocol):
 
         :param key: The key to look up.
         :returns:   The stored :class:`Block`, or ``None``.
+        """
+        ...  # pragma: no cover
+
+    def delete(self, key: Key) -> bool:
+        """Remove the block stored under *key*.
+
+        :param key: The key to remove.
+        :returns:   ``True`` if the block existed and was deleted, ``False``
+                    if no block with that key was found.
         """
         ...  # pragma: no cover

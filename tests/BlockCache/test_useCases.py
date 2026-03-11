@@ -31,6 +31,12 @@ class _InMemoryCache:
         data = self._store.get(key.value)
         return Block(data=data) if data is not None else None
 
+    def delete(self, key: Key) -> bool:
+        if key.value not in self._store:
+            return False
+        del self._store[key.value]
+        return True
+
 
 # ---------------------------------------------------------------------------
 # derive_file_block_key
