@@ -78,10 +78,6 @@ class SqliteBlockCache:
                 return None
             return Block(data=bytes(entry.data))
 
-    # ------------------------------------------------------------------
-    # Extended operations (not part of the port protocol)
-    # ------------------------------------------------------------------
-
     def delete(self, key: Key) -> bool:
         """Delete the block stored under *key*.
 

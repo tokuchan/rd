@@ -14,6 +14,7 @@ from rd.adaptors.sqliteBlockCache import SqliteBlockCache
 from rd.BlockCache import useCases
 from rd.BlockCache.errors import BlockTooLargeError
 from rd.BlockCache.models import BLOCK_SIZE, Block, Key
+from rd.BlockCache.ports import BlockCachePort
 
 _DB_URL = os.environ.get("RD_DATABASE_URL", "sqlite:///./rd.db")
 
@@ -70,7 +71,7 @@ class DataBlockIn(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def get_cache() -> SqliteBlockCache:
+def get_cache() -> BlockCachePort:
     """FastAPI dependency that returns the active block-cache adaptor."""
     return _default_cache()
 
@@ -97,7 +98,7 @@ def _decode(data: str) -> bytes:
 
 
 @app.get("/blocks/{blockID}", response_model=BlockOut, summary="Get a block by ID")
-def get_block(blockID: str, cache: SqliteBlockCache = Depends(get_cache)) -> BlockOut:
+def get_block(blockID: str, cache: BlockCachePort = Depends(get_cache)) -> BlockOut:
     key = Key(value=blockID)
     block = cache.get(key)
     if block is None:
@@ -106,9 +107,7 @@ def get_block(blockID: str, cache: SqliteBlockCache = Depends(get_cache)) -> Blo
 
 
 @app.put("/blocks/{blockID}", response_model=BlockOut, summary="Create or update a block")
-def put_block(
-    blockID: str, body: BlockIn, cache: SqliteBlockCache = Depends(get_cache)
-) -> BlockOut:
+def put_block(blockID: str, body: BlockIn, cache: BlockCachePort = Depends(get_cache)) -> BlockOut:
     raw = _decode(body.blockData)
     try:
         padded = Block(data=raw).pad(BLOCK_SIZE)
@@ -122,7 +121,7 @@ def put_block(
 
 
 @app.delete("/blocks/{blockID}", status_code=204, summary="Delete a block")
-def delete_block(blockID: str, cache: SqliteBlockCache = Depends(get_cache)) -> None:
+def delete_block(blockID: str, cache: BlockCachePort = Depends(get_cache)) -> None:
     if not cache.delete(Key(value=blockID)):
         raise HTTPException(status_code=404, detail=f"Block '{blockID}' not found")
 
@@ -132,7 +131,7 @@ def delete_block(blockID: str, cache: SqliteBlockCache = Depends(get_cache)) -> 
     response_model=BlockOut,
     summary="Store a file-addressed block (key = SHA3-256(contextKey \u2016 path))",
 )
-def put_file_block(body: FileBlockIn, cache: SqliteBlockCache = Depends(get_cache)) -> BlockOut:
+def put_file_block(body: FileBlockIn, cache: BlockCachePort = Depends(get_cache)) -> BlockOut:
     """Write a fixed-size block whose ID is derived from the owner's context key
     and a path or integer ID."""
     raw = _decode(body.blockData)
@@ -153,7 +152,7 @@ def put_file_block(body: FileBlockIn, cache: SqliteBlockCache = Depends(get_cach
     response_model=BlockOut,
     summary="Store a content-addressed data block (key = SHA3-256(block))",
 )
-def put_data_block(body: DataBlockIn, cache: SqliteBlockCache = Depends(get_cache)) -> BlockOut:
+def put_data_block(body: DataBlockIn, cache: BlockCachePort = Depends(get_cache)) -> BlockOut:
     """Write a fixed-size block whose ID is the SHA-3 256 hash of its contents."""
     raw = _decode(body.blockData)
     try:

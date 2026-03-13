@@ -67,10 +67,6 @@ class FsBlockCache:
             return None
         return Block(data=path.read_bytes())
 
-    # ------------------------------------------------------------------
-    # Extended operations (not part of the port protocol)
-    # ------------------------------------------------------------------
-
     def delete(self, key: Key) -> bool:
         """Delete the file for *key*.
 
