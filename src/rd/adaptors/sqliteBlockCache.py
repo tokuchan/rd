@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import Column, LargeBinary, String, create_engine
+from sqlalchemy import Column, LargeBinary, String, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from rd.BlockCache.models import Block, Key
@@ -29,6 +29,20 @@ class _BlockStore(_Base):
     data: bytes = Column(LargeBinary, nullable=False, default=b"")
 
 
+def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
+    """Configure SQLite pragmas for reliability and concurrency.
+
+    * WAL journal mode  — allows concurrent reads during writes.
+    * synchronous=NORMAL — safe against program/OS crashes; best balance with WAL.
+    * foreign_keys=ON   — enforce referential integrity.
+    * busy_timeout=5000 — wait up to 5 s before raising "database is locked".
+    """
+    dbapi_connection.execute("PRAGMA journal_mode=WAL")
+    dbapi_connection.execute("PRAGMA synchronous=NORMAL")
+    dbapi_connection.execute("PRAGMA foreign_keys=ON")
+    dbapi_connection.execute("PRAGMA busy_timeout=5000")
+
+
 class SqliteBlockCache:
     """Block-cache adaptor backed by a SQLite database.
 
@@ -42,6 +56,11 @@ class SqliteBlockCache:
     def __init__(self, db_url: str) -> None:
         logger.debug("SqliteBlockCache: connecting to %s", db_url)
         self._engine = create_engine(db_url, connect_args={"check_same_thread": False})
+        # Register the pragma listener before create_all() so every connection
+        # (including the one opened by create_all) has the pragmas applied.
+        # create_engine() is lazy and opens no connection, so the listener is
+        # always in place before the first real DB-API connection is made.
+        event.listen(self._engine, "connect", _set_sqlite_pragmas)
         _Base.metadata.create_all(bind=self._engine)
 
     # ------------------------------------------------------------------

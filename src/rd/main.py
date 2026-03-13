@@ -2,8 +2,6 @@
 
 import base64
 import os
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Union
 
@@ -25,18 +23,10 @@ def _default_cache() -> SqliteBlockCache:
     return SqliteBlockCache(_DB_URL)
 
 
-@asynccontextmanager
-async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
-    # Ensure the database is initialised before handling requests.
-    _default_cache()
-    yield
-
-
 app = FastAPI(
     title="BlockCache",
     description="A reliable block cache exposed via a REST interface.",
     version="0.1.0",
-    lifespan=lifespan,
 )
 
 
