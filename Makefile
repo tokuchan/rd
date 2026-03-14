@@ -48,7 +48,7 @@ build:: sync
 # Test phase
 
 test:: sync
-	uv run pytest
+	uv run pytest --doctest-modules
 
 # Run phase
 
