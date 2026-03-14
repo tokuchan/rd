@@ -52,6 +52,65 @@ class HashBlocks:
         b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
         """
         return self.get(index)
+
+
+@dataclass
+class HashRange:
+    """A finite-length, deterministically-generated "collection" of pseudorandom 256-bit blocks."""
+
+    state: bytes
+    limit: int
+
+    def get(self, index: int) -> bytes:
+        """Given an index i, less than self.limit, return the ith 256-bit block
+        in the pseudocollection.
+        
+        >>> HashRange(b"hello world", 5).get(0)
+        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+
+        >>> HashRange(b"hello world", 5).get(1)
+        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
+
+        >>> HashRange(b"hello world", 5).get(5)
+        Traceback (most recent call last):
+          ...
+        IndexError: Index 5 >= 5.
+
+        >>> HashRange(b"hello world", 5).get(15)
+        Traceback (most recent call last):
+          ...
+        IndexError: Index 15 >= 5.
+        """
+
+        if index >= self.limit:
+            raise IndexError(f"Index {index} >= {self.limit}.")
+
+        return HashBlocks(self.state).get(index)
+
+    def __getitem__(self, index: int) -> bytes:
+        """Given an index i, less than self.limit, return the ith 256-bit block
+        in the pseudocollection.
+        
+        >>> HashRange(b"hello world", 5)[0]
+        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+
+        >>> HashRange(b"hello world", 5)[1]
+        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
+
+        >>> HashRange(b"hello world", 5)[5]
+        Traceback (most recent call last):
+          ...
+        IndexError: Index 5 >= 5.
+
+        >>> HashRange(b"hello world", 5)[15]
+        Traceback (most recent call last):
+          ...
+        IndexError: Index 15 >= 5.
+         """
+
+        return self.get(index)
+
+
 class MagicNumber:
     """A deterministic PRNG seeded via the keccak-256 sponge function.
 
