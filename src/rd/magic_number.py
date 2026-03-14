@@ -7,10 +7,51 @@ hashing the internal state with a monotonically-increasing counter
 """
 
 import math
+from dataclasses import dataclass
 
 from Crypto.Hash import keccak as _keccak
 
 
+@dataclass
+class HashBlocks:
+    """A deterministically-generated "collection" of pseudorandom 256-bit blocks."""
+
+    state: bytes
+    BLOCK_BITS: int = 256
+
+    def get(self, index: int) -> bytes:
+        """Given an index i, return the ith 256-bit block in the pseudocollection.
+
+        >>> HashBlocks(b"hello world").get(0)
+        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+
+        >>> HashBlocks(b"hello world").get(1)
+        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
+
+        >>> HashBlocks(b"hello world").get(0)
+        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+        """
+
+        h = _keccak.new(digest_bits=self.BLOCK_BITS)
+        h.update(self.state)
+        indexLength = (index.bit_length() + 7) // 8 or 1  # at least 1 byte for seed == 0
+        indexBytes: bytes = index.to_bytes(indexLength, "big")
+        h.update(indexBytes)
+        return h.digest()
+
+    def __getitem__(self, index: int) -> bytes:
+        """Given an index i, return the ith 256-bit block in the pseudocollection.
+
+        >>> HashBlocks(b"hello world")[0]
+        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+
+        >>> HashBlocks(b"hello world")[1]
+        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
+
+        >>> HashBlocks(b"hello world")[0]
+        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+        """
+        return self.get(index)
 class MagicNumber:
     """A deterministic PRNG seeded via the keccak-256 sponge function.
 
