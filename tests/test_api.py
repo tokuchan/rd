@@ -166,6 +166,13 @@ def testPutFileRejectsOversizedBlock(client):
     assert resp.status_code == 422
 
 
+def testPutFileRejectsInvalidContextKey(client):
+    payload = base64.b64encode(b"small").decode()
+    resp = client.put("/file", json={"contextKey": "not-hex", "path": "x", "blockData": payload})
+    assert resp.status_code == 422
+    assert "valid hex-encoded public key" in resp.json()["detail"]
+
+
 def testPutFileUpdatesExistingBlock(client):
     """A second PUT /file to the same key overwrites the first."""
     contextKey = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"

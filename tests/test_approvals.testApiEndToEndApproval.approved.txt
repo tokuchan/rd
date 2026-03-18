@@ -1,0 +1,16 @@
+{
+  "getFile": {
+    "isPaddedToBlockSize": true,
+    "status": 200,
+    "storedLength": 4096,
+    "storedPrefix": "68656c6c6f20617070726f76616c0000"
+  },
+  "putData": {
+    "blockID": "d4dd406dc495091efbf00229b432ba33a6c6af9fe452705c43ec0a930c03f397",
+    "status": 200
+  },
+  "putFile": {
+    "blockID": "f23ab825ed4bfccc21f5069d0b58c584e8f46618df8f2364c81150b52b0ebffe",
+    "status": 200
+  }
+}

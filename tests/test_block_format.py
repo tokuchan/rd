@@ -94,3 +94,8 @@ def testFromBytesIgnoresTrailing():
 def testFromBytes300():
     ei = ExtendableInteger.fromBytes(bytes([0xAC, 0x02]))
     assert ei.asInteger() == 300
+
+
+def testFromBytesWithoutTerminatorConsumesInput():
+    ei = ExtendableInteger.fromBytes(bytes([0x80]))
+    assert ei.asInteger() == 0

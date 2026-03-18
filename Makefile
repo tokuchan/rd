@@ -38,7 +38,7 @@ lint:: # Lint the code.
 # Sync phase
 
 sync::
-	uv sync
+	uv sync --all-groups
 
 # Build phase
 
@@ -48,7 +48,7 @@ build:: sync
 # Test phase
 
 test:: sync
-	uv run pytest --doctest-modules
+	uv run pytest --doctest-modules --cov=src/rd --cov-report=term-missing --cov-report=html
 
 # Run phase
 
@@ -59,6 +59,7 @@ run:: sync
 
 clean::
 	rm -rf dist build .pytest_cache
+	rm -f tests/*.received.*
 
 lint:: sync
 	uv run black --line-length 100 src/ tests/

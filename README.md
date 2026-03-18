@@ -28,6 +28,27 @@ uv sync --all-groups
 uv run pytest
 ```
 
+### Run tests with coverage
+```bash
+make test
+```
+
+This prints missing-line coverage in the terminal and writes an HTML report to
+`htmlcov/index.html`.
+
+### Approval tests
+This project includes snapshot-style tests using the `approvaltests` package.
+
+- Approval tests live in [tests/test_approvals.py](tests/test_approvals.py).
+- Approved snapshots are checked in as `*.approved.txt` files in `tests/`.
+- On mismatch, `*.received.*` files are generated (and are gitignored).
+
+To run only approval tests:
+
+```bash
+uv run pytest tests/test_approvals.py
+```
+
 ### Run lint/format checks
 ```bash
 uv run black --line-length 100 src/ tests/

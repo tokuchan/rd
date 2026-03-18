@@ -31,6 +31,16 @@ def testSeedBytearray():
     assert isinstance(prng.deriveHashBlocks(), HashBlocks)
 
 
+def testSeedFallbackToStringRepresentation():
+    class SeedObject:
+        def __str__(self) -> str:
+            return "custom-seed"
+
+    objectSeedValue = MagicNumber(SeedObject()).deriveHashBlocks()[0]
+    stringSeedValue = MagicNumber("custom-seed").deriveHashBlocks()[0]
+    assert objectSeedValue == stringSeedValue
+
+
 # ---------------------------------------------------------------------------
 # HashBlocks / HashRange output behavior
 # ---------------------------------------------------------------------------
