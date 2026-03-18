@@ -41,6 +41,7 @@ def client(tmp_path):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    engine.dispose()
 
 
 def testPutAndGet(client):

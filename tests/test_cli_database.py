@@ -1,8 +1,5 @@
 """Coverage-focused tests for CLI and database helper paths."""
 
-import runpy
-import sys
-
 from click.testing import CliRunner
 
 import rd.cli as cli
@@ -63,14 +60,6 @@ def testCacheCommandInvokesUvicorn(monkeypatch):
         "port": 9000,
         "reload": True,
     }
-
-
-def testCliMainGuardExecutes(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["rd", "--help"])
-    try:
-        runpy.run_module("rd.cli", run_name="__main__")
-    except SystemExit as ex:
-        assert ex.code == 0
 
 
 def testEnableWalExecutesPragma():

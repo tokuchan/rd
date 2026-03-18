@@ -58,6 +58,3 @@ def cache(host: str, port: int, reload: bool, verbosity: int, quietness: int) ->
         reload=reload,
     )
 
-
-if __name__ == "__main__":
-    main()

@@ -2,6 +2,7 @@
 
 import base64
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 from approvaltests import verify
@@ -16,7 +17,8 @@ from rd.main import BlockSize, app
 from rd.models import Base
 
 
-def _makeClient(tmpPath: Path) -> TestClient:
+@contextmanager
+def _makeClient(tmpPath: Path):
     dbUrl = f"sqlite:///{tmpPath}/approval-tests.db"
     engine = create_engine(dbUrl, connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
@@ -30,7 +32,10 @@ def _makeClient(tmpPath: Path) -> TestClient:
             db.close()
 
     app.dependency_overrides[getDb] = overrideGetDb
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
+    app.dependency_overrides.clear()
+    engine.dispose()
 
 
 def testCliHelpApproval():
@@ -57,8 +62,6 @@ def testApiEndToEndApproval(tmp_path):
 
         putDataResponse = client.put("/data", json={"blockData": dataPayload})
         dataBlockId = putDataResponse.json()["blockID"]
-
-    app.dependency_overrides.clear()
 
     snapshot = {
         "putFile": {
