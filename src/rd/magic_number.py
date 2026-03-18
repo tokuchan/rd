@@ -42,6 +42,7 @@ class HashBlocks:
 
     state: bytes
     hashFactory: HashFactory = hashlib.sha3_256
+    mapFunction: Callable[[bytes], bytes] = lambda x: x
 
     def get(self, index: int) -> bytes:
         """Return the block at `index` in the deterministic pseudo-list.
@@ -59,7 +60,7 @@ class HashBlocks:
 
         indexLength = (index.bit_length() + 7) // 8 or 1
         indexBytes = index.to_bytes(indexLength, "big")
-        return _hashBytes(self.state + indexBytes, self.hashFactory)
+        return self.mapFunction(_hashBytes(self.state + indexBytes, self.hashFactory))
 
     def __getitem__(self, index: int) -> bytes:
         """Return the block at `index` in the deterministic pseudo-list.
@@ -80,6 +81,7 @@ class HashRange:
     state: bytes
     limit: int
     hashFactory: HashFactory = hashlib.sha3_256
+    mapFunction: Callable[[bytes], bytes] = lambda x: x
 
     def get(self, index: int) -> bytes:
         """Return the block at `index`, bounded by `limit`.
@@ -103,7 +105,7 @@ class HashRange:
         if index >= self.limit:
             raise IndexError(f"Index {index} >= {self.limit}.")
 
-        return HashBlocks(self.state, self.hashFactory).get(index)
+        return HashBlocks(self.state, self.hashFactory, self.mapFunction).get(index)
 
     def __getitem__(self, index: int) -> bytes:
         """Return the block at `index`, bounded by `limit`.
@@ -177,7 +179,7 @@ class MagicNumber:
         """
         return MagicNumber._fromState(self._nextState(), self._hashFactory)
 
-    def deriveHashBlocks(self) -> HashBlocks:
+    def deriveHashBlocks(self, mapFunction: Callable[[bytes], bytes] = lambda x: x) -> HashBlocks:
         """Derive and return a fresh `HashBlocks` view.
 
         >>> m = MagicNumber("seed")
@@ -185,9 +187,9 @@ class MagicNumber:
         >>> isinstance(blocks, HashBlocks)
         True
         """
-        return HashBlocks(self._nextState(), self._hashFactory)
+        return HashBlocks(self._nextState(), self._hashFactory, mapFunction)
 
-    def deriveHashRange(self, limit: int) -> HashRange:
+    def deriveHashRange(self, limit: int, mapFunction: Callable[[bytes], bytes] = lambda x: x) -> HashRange:
         """Derive and return a fresh bounded `HashRange` view.
 
         >>> m = MagicNumber("seed")
@@ -196,7 +198,12 @@ class MagicNumber:
         True
         >>> r.limit
         2
+        >>> r = m.deriveHashRange(2, mapFunction=lambda x: x[::-1])
+        >>> isinstance(r, HashRange)
+        True
+        >>> r.limit
+        2
         """
         if limit < 0:
             raise ValueError("limit must be non-negative")
-        return HashRange(self._nextState(), limit, self._hashFactory)
+        return HashRange(self._nextState(), limit, self._hashFactory, mapFunction)
