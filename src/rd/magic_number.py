@@ -1,185 +1,202 @@
-"""Keccak-based deterministic PRNG (sponge construction).
+"""Deterministic hash-derived namespaces for PRNG-generated data.
 
-``MagicNumber`` absorbs a seed value into a keccak-256 state and then
-provides an unlimited stream of pseudo-random bytes by repeatedly
-hashing the internal state with a monotonically-increasing counter
-(counter-mode keccak squeeze).
+`MagicNumber` hashes an input seed into an internal state, then derives
+new independent states using an incrementing counter. Each derivation can
+be materialized as:
+
+- another `MagicNumber` (for hierarchy/branching),
+- a `HashBlocks` view (an indexable infinite list), or
+- a `HashRange` view (an indexable finite list).
+
+The hashing algorithm is pluggable via a hash-factory callable and defaults
+to `hashlib.sha3_256`.
 """
 
-import math
+import hashlib
 from dataclasses import dataclass
+from typing import Callable
 
-from Crypto.Hash import keccak as _keccak
+HashFactory = Callable[[], "hashlib._Hash"]
+
+
+def _normalizeSeed(seed) -> bytes:
+    if isinstance(seed, int):
+        byteLength = (seed.bit_length() + 7) // 8 or 1
+        return seed.to_bytes(byteLength, "big")
+    if isinstance(seed, str):
+        return seed.encode("utf-8")
+    if isinstance(seed, (bytes, bytearray)):
+        return bytes(seed)
+    return str(seed).encode("utf-8")
+
+
+def _hashBytes(payload: bytes, hashFactory: HashFactory) -> bytes:
+    hasher = hashFactory()
+    hasher.update(payload)
+    return hasher.digest()
 
 
 @dataclass
 class HashBlocks:
-    """A deterministically-generated "collection" of pseudorandom 256-bit blocks."""
+    """Deterministically-generated, indexable pseudorandom hash blocks."""
 
     state: bytes
-    BLOCK_BITS: int = 256
+    hashFactory: HashFactory = hashlib.sha3_256
 
     def get(self, index: int) -> bytes:
-        """Given an index i, return the ith 256-bit block in the pseudocollection.
+        """Return the block at `index` in the deterministic pseudo-list.
 
-        >>> HashBlocks(b"hello world").get(0)
-        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
-
-        >>> HashBlocks(b"hello world").get(1)
-        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
-
-        >>> HashBlocks(b"hello world").get(0)
-        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+        >>> hb = HashBlocks(b"hello world")
+        >>> hb.get(0) == hb.get(0)
+        True
+        >>> hb.get(0) != hb.get(1)
+        True
+        >>> len(hb.get(0))
+        32
         """
+        if index < 0:
+            raise IndexError(f"Index {index} < 0.")
 
-        h = _keccak.new(digest_bits=self.BLOCK_BITS)
-        h.update(self.state)
-        indexLength = (index.bit_length() + 7) // 8 or 1  # at least 1 byte for seed == 0
-        indexBytes: bytes = index.to_bytes(indexLength, "big")
-        h.update(indexBytes)
-        return h.digest()
+        indexLength = (index.bit_length() + 7) // 8 or 1
+        indexBytes = index.to_bytes(indexLength, "big")
+        return _hashBytes(self.state + indexBytes, self.hashFactory)
 
     def __getitem__(self, index: int) -> bytes:
-        """Given an index i, return the ith 256-bit block in the pseudocollection.
+        """Return the block at `index` in the deterministic pseudo-list.
 
-        >>> HashBlocks(b"hello world")[0]
-        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
-
-        >>> HashBlocks(b"hello world")[1]
-        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
-
-        >>> HashBlocks(b"hello world")[0]
-        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+        >>> hb = HashBlocks(b"hello world")
+        >>> hb[0] == hb.get(0)
+        True
+        >>> hb[1] == hb.get(1)
+        True
         """
         return self.get(index)
 
 
 @dataclass
 class HashRange:
-    """A finite-length, deterministically-generated "collection" of pseudorandom 256-bit blocks."""
+    """Finite-length deterministic range over `HashBlocks`."""
 
     state: bytes
     limit: int
+    hashFactory: HashFactory = hashlib.sha3_256
 
     def get(self, index: int) -> bytes:
-        """Given an index i, less than self.limit, return the ith 256-bit block
-        in the pseudocollection.
-        
-        >>> HashRange(b"hello world", 5).get(0)
-        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+        """Return the block at `index`, bounded by `limit`.
 
-        >>> HashRange(b"hello world", 5).get(1)
-        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
-
+        >>> hr = HashRange(b"hello world", 5)
+        >>> hr.get(0) == hr.get(0)
+        True
+        >>> hr.get(0) != hr.get(1)
+        True
         >>> HashRange(b"hello world", 5).get(5)
         Traceback (most recent call last):
-          ...
+        ...
         IndexError: Index 5 >= 5.
-
         >>> HashRange(b"hello world", 5).get(15)
         Traceback (most recent call last):
-          ...
+        ...
         IndexError: Index 15 >= 5.
         """
-
+        if index < 0:
+            raise IndexError(f"Index {index} < 0.")
         if index >= self.limit:
             raise IndexError(f"Index {index} >= {self.limit}.")
 
-        return HashBlocks(self.state).get(index)
+        return HashBlocks(self.state, self.hashFactory).get(index)
 
     def __getitem__(self, index: int) -> bytes:
-        """Given an index i, less than self.limit, return the ith 256-bit block
-        in the pseudocollection.
-        
-        >>> HashRange(b"hello world", 5)[0]
-        b"\\xca\\xfb\\xcfZ5n\\xd1\\xc2\\x13c;'v\\xc5\\xba\\xca\\x9c\\x06jc\\x10:\\xa3\\xe4\\x16\\xaf\\x9a\\xa2\\xe0G\\xdc\\x87"
+        """Return the block at `index`, bounded by `limit`.
 
-        >>> HashRange(b"hello world", 5)[1]
-        b'\\x899P\\xfc\\xd57a\\x89/\\xe4\\x8f\\xc4\\xb5?K\\xc9\\xfe1\\xaa\\x88!\\xf1)\\xb4\\xc6\\xc9{:\\xa0\\xb7\\x14B'
-
+        >>> hr = HashRange(b"hello world", 5)
+        >>> hr[0] == hr.get(0)
+        True
+        >>> hr[1] == hr.get(1)
+        True
         >>> HashRange(b"hello world", 5)[5]
         Traceback (most recent call last):
-          ...
+        ...
         IndexError: Index 5 >= 5.
-
         >>> HashRange(b"hello world", 5)[15]
         Traceback (most recent call last):
-          ...
+        ...
         IndexError: Index 15 >= 5.
-         """
-
+        """
         return self.get(index)
 
 
 class MagicNumber:
-    """A deterministic PRNG seeded via the keccak-256 sponge function.
+    """Deterministic state derivation for `HashBlocks` and `HashRange`.
 
-    The seed may be an :class:`int`, :class:`str`, :class:`bytes`, or
-    :class:`bytearray`.  Successive calls to :meth:`bytes` or
-    :meth:`blockId` advance the internal counter so each call returns a
-    distinct, non-overlapping slice of the pseudo-random stream.
+    Typical usage:
 
-    Example::
+    1. Construct one `MagicNumber` from a seed.
+    2. Derive one or more child `MagicNumber` instances.
+    3. Materialize `HashBlocks`/`HashRange` views from any branch.
 
-        prng = MagicNumber("my-secret-seed")
-        block_a = prng.blockId()   # first 256-bit block ID
-        block_b = prng.blockId()   # second, different 256-bit block ID
+    Every derivation call advances an internal counter, so each returned
+    object receives a unique derived state.
+
+    >>> root = MagicNumber("my-secret-seed")
+    >>> branch = root.deriveMagicNumber()
+    >>> blocks = root.deriveHashBlocks()
+    >>> bounded = branch.deriveHashRange(3)
+    >>> len(blocks[0])
+    32
+    >>> len(bounded[1])
+    32
     """
 
-    _BLOCK_BITS = 256
-    _BLOCK_BYTES = _BLOCK_BITS // 8
-
-    def __init__(self, seed) -> None:
-        if isinstance(seed, int):
-            byte_length = (seed.bit_length() + 7) // 8 or 1  # at least 1 byte for seed == 0
-            seed_bytes: bytes = seed.to_bytes(byte_length, "big")
-        elif isinstance(seed, str):
-            seed_bytes = seed.encode("utf-8")
-        elif isinstance(seed, (bytes, bytearray)):
-            seed_bytes = bytes(seed)
-        else:
-            seed_bytes = str(seed).encode("utf-8")
-
-        k = _keccak.new(digest_bits=self._BLOCK_BITS)
-        k.update(seed_bytes)
-        self._state: bytes = k.digest()
+    def __init__(self, seed, hashFactory: HashFactory = hashlib.sha3_256) -> None:
+        self._hashFactory = hashFactory
+        self._state: bytes = _hashBytes(_normalizeSeed(seed), self._hashFactory)
         self._counter: int = 0
-        self._buf: bytearray = bytearray()  # unconsumed bytes from the last squeeze block
 
-    def bytes(self, length: int) -> bytes:
-        """Squeeze *length* bits from the sponge.
+    @classmethod
+    def _fromState(cls, state: bytes, hashFactory: HashFactory) -> "MagicNumber":
+        instance = cls.__new__(cls)
+        instance._hashFactory = hashFactory
+        instance._state = state
+        instance._counter = 0
+        return instance
 
-        Returns ``ceil(length / 8)`` bytes.  If *length* is not a multiple
-        of 8 the final byte is zero-padded (masked) to align to a byte
-        boundary.
+    def _nextState(self) -> bytes:
+        counterBytes = self._counter.to_bytes(8, "big")
+        derivedState = _hashBytes(self._state + counterBytes, self._hashFactory)
+        self._counter += 1
+        return derivedState
 
-        Each call advances the internal counter so successive calls produce
-        non-overlapping output.
+    def deriveMagicNumber(self) -> "MagicNumber":
+        """Derive and return a child `MagicNumber` with a fresh state.
 
-        :param length: Number of bits to squeeze (non-negative).
-        :raises ValueError: If *length* is negative.
+        >>> root = MagicNumber("seed")
+        >>> c1 = root.deriveMagicNumber()
+        >>> c2 = root.deriveMagicNumber()
+        >>> c1.deriveHashBlocks()[0] != c2.deriveHashBlocks()[0]
+        True
         """
-        if length < 0:
-            raise ValueError("length must be non-negative")
+        return MagicNumber._fromState(self._nextState(), self._hashFactory)
 
-        byte_count = math.ceil(length / 8)
-        while len(self._buf) < byte_count:
-            k = _keccak.new(digest_bits=self._BLOCK_BITS)
-            k.update(self._state)
-            k.update(self._counter.to_bytes(8, "big"))
-            self._buf.extend(k.digest())
-            self._counter += 1
+    def deriveHashBlocks(self) -> HashBlocks:
+        """Derive and return a fresh `HashBlocks` view.
 
-        output = bytearray(self._buf[:byte_count])
-        self._buf = self._buf[byte_count:]
+        >>> m = MagicNumber("seed")
+        >>> blocks = m.deriveHashBlocks()
+        >>> isinstance(blocks, HashBlocks)
+        True
+        """
+        return HashBlocks(self._nextState(), self._hashFactory)
 
-        leftover_bits = length % 8
-        if leftover_bits != 0:
-            mask = (0xFF << (8 - leftover_bits)) & 0xFF
-            output[-1] = output[-1] & mask
+    def deriveHashRange(self, limit: int) -> HashRange:
+        """Derive and return a fresh bounded `HashRange` view.
 
-        return bytes(output)
-
-    def blockId(self) -> bytes:
-        """Return a 256-bit (32-byte) block ID squeezed from the sponge."""
-        return self.bytes(256)
+        >>> m = MagicNumber("seed")
+        >>> r = m.deriveHashRange(2)
+        >>> isinstance(r, HashRange)
+        True
+        >>> r.limit
+        2
+        """
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        return HashRange(self._nextState(), limit, self._hashFactory)

@@ -1,160 +1,172 @@
-"""Tests for MagicNumber — keccak-based deterministic PRNG."""
+"""Tests for MagicNumber deterministic state derivation."""
+
+import hashlib
 
 import pytest
 
-from rd.magic_number import MagicNumber
+from rd.magic_number import HashBlocks, HashRange, MagicNumber
 
 # ---------------------------------------------------------------------------
 # Construction — various seed types
 # ---------------------------------------------------------------------------
 
 
-def test_seed_string():
+def testSeedString():
     prng = MagicNumber("hello")
-    assert isinstance(prng.blockId(), bytes)
+    assert isinstance(prng.deriveMagicNumber(), MagicNumber)
 
 
-def test_seed_integer():
+def testSeedInteger():
     prng = MagicNumber(42)
-    assert isinstance(prng.blockId(), bytes)
+    assert isinstance(prng.deriveHashBlocks(), HashBlocks)
 
 
-def test_seed_bytes():
+def testSeedBytes():
     prng = MagicNumber(b"\x00\x01\x02")
-    assert isinstance(prng.blockId(), bytes)
+    assert isinstance(prng.deriveHashRange(1), HashRange)
 
 
-def test_seed_bytearray():
+def testSeedBytearray():
     prng = MagicNumber(bytearray(b"\xde\xad\xbe\xef"))
-    assert isinstance(prng.blockId(), bytes)
+    assert isinstance(prng.deriveHashBlocks(), HashBlocks)
 
 
 # ---------------------------------------------------------------------------
-# bytes() — length and output properties
+# HashBlocks / HashRange output behavior
 # ---------------------------------------------------------------------------
 
 
-def test_bytes_zero_length():
-    prng = MagicNumber("seed")
-    assert prng.bytes(0) == b""
+def testHashBlocksGetAndIndexMatch():
+    blocks = MagicNumber("seed").deriveHashBlocks()
+    assert blocks.get(0) == blocks[0]
 
 
-def test_bytes_exact_block():
-    # 256 bits → 32 bytes, exactly one keccak-256 block
-    prng = MagicNumber("seed")
-    result = prng.bytes(256)
-    assert len(result) == 32
+def testHashBlocksValuesAreDigestSized():
+    blocks = MagicNumber("seed").deriveHashBlocks()
+    assert len(blocks[0]) == hashlib.sha3_256().digest_size
 
 
-def test_bytes_partial_last_byte():
-    # 9 bits → 2 bytes; low 7 bits of the second byte must be zero
-    prng = MagicNumber("seed")
-    result = prng.bytes(9)
-    assert len(result) == 2
-    assert result[1] & 0x7F == 0, "bits beyond the requested 9 must be cleared"
+def testHashRangeGetAndIndexMatch():
+    rng = MagicNumber("seed").deriveHashRange(5)
+    assert rng.get(3) == rng[3]
 
 
-def test_bytes_non_multiple_of_8():
-    # 10 bits → 2 bytes; low 6 bits of last byte masked
-    prng = MagicNumber("seed")
-    result = prng.bytes(10)
-    assert len(result) == 2
-    assert result[1] & 0x3F == 0
+def testHashRangeOutOfBoundsRaises():
+    rng = MagicNumber("seed").deriveHashRange(2)
+    with pytest.raises(IndexError):
+        _ = rng[2]
 
 
-def test_bytes_multiple_blocks():
-    # 512 bits → 64 bytes, requires two keccak blocks
-    prng = MagicNumber("seed")
-    result = prng.bytes(512)
-    assert len(result) == 64
+def testHashBlocksNegativeIndexRaises():
+    blocks = MagicNumber("seed").deriveHashBlocks()
+    with pytest.raises(IndexError):
+        _ = blocks[-1]
 
 
-def test_bytes_negative_raises():
+def testHashRangeNegativeIndexRaises():
+    rng = MagicNumber("seed").deriveHashRange(2)
+    with pytest.raises(IndexError):
+        _ = rng[-1]
+
+
+def testHashRangeNegativeLimitRaises():
     prng = MagicNumber("seed")
     with pytest.raises(ValueError):
-        prng.bytes(-1)
+        prng.deriveHashRange(-1)
 
 
 # ---------------------------------------------------------------------------
-# blockId() — shape and type
+# Determinism — same seed and derivation shape -> same output
 # ---------------------------------------------------------------------------
 
 
-def test_block_id_length():
-    prng = MagicNumber("seed")
-    bid = prng.blockId()
-    assert len(bid) == 32
-
-
-def test_block_id_returns_bytes():
-    prng = MagicNumber("seed")
-    assert isinstance(prng.blockId(), bytes)
-
-
-# ---------------------------------------------------------------------------
-# Determinism — same seed → same output
-# ---------------------------------------------------------------------------
-
-
-def test_deterministic_bytes():
+def testDeterministicHashBlocksFirstValue():
     prng1 = MagicNumber("deterministic")
     prng2 = MagicNumber("deterministic")
-    assert prng1.bytes(256) == prng2.bytes(256)
+    assert prng1.deriveHashBlocks()[0] == prng2.deriveHashBlocks()[0]
 
 
-def test_deterministic_block_id():
+def testDeterministicHashRangeValue():
     prng1 = MagicNumber("deterministic")
     prng2 = MagicNumber("deterministic")
-    assert prng1.blockId() == prng2.blockId()
+    assert prng1.deriveHashRange(5)[4] == prng2.deriveHashRange(5)[4]
 
 
-def test_deterministic_sequence():
-    prng1 = MagicNumber("seq-test")
-    prng2 = MagicNumber("seq-test")
-    seq1 = [prng1.blockId() for _ in range(5)]
-    seq2 = [prng2.blockId() for _ in range(5)]
-    assert seq1 == seq2
-
-
-# ---------------------------------------------------------------------------
-# Different seeds → different output
-# ---------------------------------------------------------------------------
-
-
-def test_different_seeds_differ():
-    assert MagicNumber("seed-a").blockId() != MagicNumber("seed-b").blockId()
-
-
-def test_different_int_seeds_differ():
-    assert MagicNumber(0).blockId() != MagicNumber(1).blockId()
+def testDeterministicChildMagicNumberFlow():
+    parent1 = MagicNumber("deterministic")
+    parent2 = MagicNumber("deterministic")
+    child1 = parent1.deriveMagicNumber()
+    child2 = parent2.deriveMagicNumber()
+    assert child1.deriveHashBlocks()[0] == child2.deriveHashBlocks()[0]
 
 
 # ---------------------------------------------------------------------------
-# Sequential calls advance the stream
+# Different seeds -> different output
 # ---------------------------------------------------------------------------
 
 
-def test_successive_block_ids_differ():
+def testDifferentSeedsDiffer():
+    assert (
+        MagicNumber("seed-a").deriveHashBlocks()[0] != MagicNumber("seed-b").deriveHashBlocks()[0]
+    )
+
+
+def testDifferentIntSeedsDiffer():
+    assert MagicNumber(0).deriveHashBlocks()[0] != MagicNumber(1).deriveHashBlocks()[0]
+
+
+# ---------------------------------------------------------------------------
+# Sequential derivations advance state
+# ---------------------------------------------------------------------------
+
+
+def testSuccessiveHashBlocksAreDistinct():
+    prng = MagicNumber("seed")
+    first = prng.deriveHashBlocks()[0]
+    second = prng.deriveHashBlocks()[0]
+    assert first != second
+
+
+def testSuccessiveHashRangesAreDistinct():
+    prng = MagicNumber("seed")
+    first = prng.deriveHashRange(3)[0]
+    second = prng.deriveHashRange(3)[0]
+    assert first != second
+
+
+def testSuccessiveChildMagicNumbersAreDistinct():
     prng = MagicNumber("advance-test")
-    b1 = prng.blockId()
-    b2 = prng.blockId()
-    assert b1 != b2
+    child1 = prng.deriveMagicNumber()
+    child2 = prng.deriveMagicNumber()
+
+    value1 = child1.deriveHashBlocks()[0]
+    value2 = child2.deriveHashBlocks()[0]
+    assert value1 != value2
 
 
-def test_successive_bytes_differ():
-    prng = MagicNumber("advance-test")
-    r1 = prng.bytes(256)
-    r2 = prng.bytes(256)
-    assert r1 != r2
+def testGeneralUsagePatternBranchingIsDeterministic():
+    rootA = MagicNumber("tree-seed")
+    rootB = MagicNumber("tree-seed")
+
+    branchA = rootA.deriveMagicNumber()
+    branchB = rootB.deriveMagicNumber()
+
+    rootBlocksA = rootA.deriveHashBlocks()
+    rootBlocksB = rootB.deriveHashBlocks()
+    branchRangeA = branchA.deriveHashRange(4)
+    branchRangeB = branchB.deriveHashRange(4)
+
+    assert rootBlocksA[2] == rootBlocksB[2]
+    assert branchRangeA[3] == branchRangeB[3]
 
 
-def test_stream_is_non_overlapping():
-    # Requesting 512 bits in one call vs two 256-bit calls must give same data
-    prng1 = MagicNumber("overlap")
-    combined = prng1.bytes(512)
+def testPluggableHashAlgorithmChangesOutput():
+    defaultValue = MagicNumber("pluggable-seed").deriveHashBlocks()[0]
+    sha256Value = MagicNumber("pluggable-seed", hashFactory=hashlib.sha256).deriveHashBlocks()[0]
+    assert defaultValue != sha256Value
 
-    prng2 = MagicNumber("overlap")
-    first = prng2.bytes(256)
-    second = prng2.bytes(256)
 
-    assert combined == first + second
+def testPluggableHashAlgorithmIsDeterministic():
+    first = MagicNumber("pluggable-seed", hashFactory=hashlib.sha256).deriveHashBlocks()[0]
+    second = MagicNumber("pluggable-seed", hashFactory=hashlib.sha256).deriveHashBlocks()[0]
+    assert first == second
