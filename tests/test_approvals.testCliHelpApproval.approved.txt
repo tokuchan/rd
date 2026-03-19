@@ -1,0 +1,11 @@
+Usage: main cache [OPTIONS]
+
+  Start the ReliableData BlockCache REST server.
+
+Options:
+  --host TEXT     Bind host.  [default: 127.0.0.1]
+  --port INTEGER  Bind port.  [default: 8000]
+  --reload        Enable auto-reload (development).
+  -v              Increase verbosity (repeatable).
+  -q              Decrease verbosity (repeatable).
+  --help          Show this message and exit.

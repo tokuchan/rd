@@ -20,10 +20,13 @@ class Store(Base):
 
     __tablename__ = "store"
 
-    block_id: str = Column(String, primary_key=True, index=True, nullable=False)
-    block_data: bytes = Column(LargeBinary, nullable=False, default=b"")
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
+    blockId: str = Column("block_id", String, primary_key=True, index=True, nullable=False)
+    blockData: bytes = Column("block_data", LargeBinary, nullable=False, default=b"")
+    createdAt = Column(
+        "created_at", DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updatedAt = Column(
+        "updated_at",
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),

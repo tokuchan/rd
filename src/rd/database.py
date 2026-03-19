@@ -11,32 +11,32 @@ from rd.models import Base
 
 logger = logging.getLogger(__name__)
 
-_DB_URL = os.environ.get("RD_DATABASE_URL", "sqlite:///./rd.db")
+DbUrl = os.environ.get("RD_DATABASE_URL", "sqlite:///./rd.db")
 
 engine = create_engine(
-    _DB_URL,
+    DbUrl,
     connect_args={"check_same_thread": False},  # required for SQLite
 )
 
 
 @event.listens_for(engine, "connect")
-def _enable_wal(dbapi_connection, connection_record) -> None:
+def _enableWal(dbapiConnection, connectionRecord) -> None:
     """Enable Write-Ahead Logging for safer concurrent access."""
     logger.debug("Enabling WAL journal mode on new connection")
-    dbapi_connection.execute("PRAGMA journal_mode=WAL")
+    dbapiConnection.execute("PRAGMA journal_mode=WAL")
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def init_db() -> None:
+def initDb() -> None:
     """Create all tables defined in the schema."""
-    logger.info("Initialising database schema at %s", _DB_URL)
+    logger.info("Initialising database schema at %s", DbUrl)
     Base.metadata.create_all(bind=engine)
     logger.debug("Database schema ready")
 
 
-def get_db() -> Generator[Session, None, None]:
+def getDb() -> Generator[Session, None, None]:
     """FastAPI dependency that yields a database session."""
     logger.debug("Opening database session")
     db = SessionLocal()
