@@ -4,14 +4,9 @@ import base64
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from rd.database import get_db
-from rd.main import BLOCK_SIZE, app
-from rd.models import Base
-
-# TODO: import hashlib once CSPRNG / key-derivation helpers are added (reserved for future use)
+from rd.adaptors.sqliteBlockCache import SqliteBlockCache
+from rd.main import BLOCK_SIZE, app, get_cache
 
 
 def _b64(s: str) -> str:
@@ -24,20 +19,11 @@ def _decode(s: str) -> str:
 
 @pytest.fixture()
 def client(tmp_path):
-    """Return a TestClient backed by a fresh in-memory SQLite database."""
+    """Return a TestClient backed by a fresh isolated SQLite database."""
     db_url = f"sqlite:///{tmp_path}/test.db"
-    engine = create_engine(db_url, connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    cache = SqliteBlockCache(db_url)
 
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_cache] = lambda: cache
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
